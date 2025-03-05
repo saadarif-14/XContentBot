@@ -11,7 +11,7 @@ import json
 
 
 os.environ["OPENROUTER_API_KEY"] = os.getenv("OPENROUTER_API_KEY")
-# os.environ["RAPIDAPI_KEY"] = os.getenv("RAPIDAPI_KEY")
+
 RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
 RAPIDAPI_HOST = "twitter-aio.p.rapidapi.com"  # Replace with the correct host for the API
 
