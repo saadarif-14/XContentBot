@@ -3,7 +3,7 @@ import tweepy
 from crewai import Agent
 from langchain.tools import Tool
 from litellm import completion 
-import requests
+
 import http.client
 import json
 
@@ -13,7 +13,7 @@ import json
 os.environ["OPENROUTER_API_KEY"] = os.getenv("OPENROUTER_API_KEY")
 
 RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
-RAPIDAPI_HOST = "twitter-aio.p.rapidapi.com"  # Replace with the correct host for the API
+RAPIDAPI_HOST = os.getenv("RAPIDAPI_HOST")  # Replace with the correct host for the API
 
 class OpenRouterLLM:
     def __init__(self, model_name="openrouter/google/gemini-2.0-flash-lite-001"):
