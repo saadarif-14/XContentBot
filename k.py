@@ -19,29 +19,32 @@ RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
 RAPIDAPI_HOST = os.getenv("RAPIDAPI_HOST")  # Ensure this is correctly set in .env
 SERPER_API_KEY = os.getenv("SERPER_API_KEY")
 
-IMAGE_API_URL = "https://n8n.alphabase.co/webhook/generate-image"
+
 
 # llm = OpenRouterLLM()
 class LiteLLMGemini:
-    def __init__(self, model_name="gemini/gemini-2.0-flash"):
+    def __init__(self, model_name="gemini/gemini-2.0-flash", max_tokens=600):
         self.model_name = model_name
-      
+        self.max_tokens = max_tokens  # Set max tokens limit
 
     def __call__(self, prompt: str):
         """
-        Calls Google Gemini via LiteLLM.
+        Calls Google Gemini via LiteLLM with a token limit.
         """
         try:
             response = completion(
                 model=self.model_name,
-                messages=[{"role": "user", "content": prompt}]
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=self.max_tokens  # Apply token limit
             )
             return response["choices"][0]["message"]["content"]
         except Exception as e:
             return f"❌ Error: {str(e)}"
 
 
-llm = LiteLLMGemini()
+# Example Usage:
+llm = LiteLLMGemini(max_tokens=513)  # Set max tokens dynamically
+
 
 
 # -------------- Fetch Trending Topics -----------------
@@ -97,79 +100,8 @@ def fetch_trending_topics(topic):
         print(f"An error occurred: {e}")
 
     conn.close()
-
 # -------------- Image Generation API Call -----------------
 
-
-
-
-
-IMAGE_SAVE_PATH = "generated_image.jpg"  
-
-
-def generate_image(prompt):
-    """
-    Generates an image based on the given prompt using an external API.
-    
-    Returns:
-        str: File path to the saved image OR error message.
-    """
-    payload = {"prompt": prompt}
-    headers = {"Content-Type": "application/json"}
-
-    try:
-        response = requests.post(IMAGE_API_URL, json=payload, headers=headers, timeout=30)
-
-        print("🔍 Image API Response Status:", response.status_code)  
-        print("🔍 Image API Headers:", response.headers)  
-
-        if response.status_code == 200:
-            content_type = response.headers.get("Content-Type", "")
-
-            # ✅ Case 1: API returns JSON with an image URL
-            if "application/json" in content_type:
-                try:
-                    data = response.json()  # Parse JSON response
-                    image_url = data.get("image_url")
-
-                    if not image_url:
-                        return "⚠️ Error: No image URL found in API response."
-
-                   
-                    img_response = requests.get(image_url, stream=True)
-                    if img_response.status_code == 200:
-                        with open("generated_image.jpg", "wb") as f:
-                            f.write(img_response.content) 
-
-                        print("✅ Image downloaded and saved at: generated_image.jpg")
-                        return "generated_image.jpg"
-                    else:
-                        return f"❌ Error: Failed to download image from {image_url}"
-
-                except ValueError:
-                    return "⚠️ Error: API response is not valid JSON."
-
-            
-            elif "image" in content_type:
-                with open("generated_image.jpg", "wb") as f:
-                    f.write(response.content)  
-
-                print("✅ Image saved at: generated_image.jpg")
-                return "generated_image.jpg" 
-
-            else:
-                return "⚠️ Error: Unexpected response format."
-
-        else:
-            return f"❌ Error: {response.status_code} - {response.text}"
-
-    except requests.exceptions.Timeout:
-        return "⚠️ Error: Image generation API took too long to respond."
-
-    except requests.exceptions.RequestException as e:
-        return f"❌ Error: Failed to connect to API - {str(e)}"
-    
-    
 
 def search_google(query):
     url = "https://serpapi.com/search"
@@ -185,11 +117,7 @@ fetch_trending_topics_tool = Tool(
     description="Fetches recent tweets containing the given query."
 )
 
-fetch_image_tool = Tool(
-    name="Generate Image",
-    func=generate_image,
-    description="Generates an image based on the provided prompt."
-)
+
 
 search_google_tool = Tool(
     name="Search Google",
@@ -217,6 +145,8 @@ trending_topics_agent = Agent(
     backstory="A social media analyst skilled at finding real-time discussions.",
     llm=llm,
     tools=[fetch_trending_topics_tool],
+    output_type="text",
+    verbose=True,
   
 )
 
@@ -226,23 +156,13 @@ writing_agent = Agent(
     role="Writes an engaging Tweet based on the topic.",
     goal="Produce high-quality, engaging content.",
     backstory="A skilled writer specializing in social media storytelling by searching from the google search results.",
-    llm=llm,
-    # expected_output="A compelling tweet with engaging content and hashtags",
     output_type="text",
+    llm=llm,
     verbose=True,
     
 )
 # Image Generation Agent
-image_generation_agent = Agent(
-    name="ImageGenerationAgent",
-    role="Generates relevant images for tweets.",
-    goal="Create visually appealing images related to tweet content.",
-    backstory="An AI-powered designer specializing in social media visuals.",
-    tools=[fetch_image_tool],  # ✅ Uses the tool to generate images
-    llm=llm,
-    expected_output="A valid image file path.. Ensure tools are correctly implemented.",
-    output_type="text"
-)
+
 
 # -------------- Define Tasks -----------------
 def create_tasks(selected_pillar):
@@ -263,20 +183,21 @@ def create_tasks(selected_pillar):
     )
 
     writing_task = Task(
-        description="Generate a compelling tweet based on the following research:\n{{research_task.output}}\n and the following trending topics:\n{{trending_topics_task.output}}\n"
-                    "Ensure the tweet is engaging, concise, and provides valuable insights. "
-                    "Include relevant hashtags for better reach.",
+        description="Generate a compelling tweet based on the following research:\n"
+                    "{{research_task.output or 'No research data found'}}\n"
+                    "and the following trending topics:\n"
+                    "{{trending_topics_task.output or 'No trending topics found'}}\n"
+                    "\nEnsure the tweet is engaging, concise, and provides valuable insights."
+                    "\nSTRICT REQUIREMENT: The tweet MUST NOT exceed 280 characters."
+                    "\nUse short, impactful sentences and avoid unnecessary fluff."
+                    "\n\nFinally, include a strong Call-To-Action (CTA) promoting Alphabase. "
+                    "\nInclude relevant hashtags for better reach.",
         agent=writing_agent,
-        expected_output="A well-structured tweet with engaging content, relevant hashtags."
+        expected_output="A well-structured tweet within 280 characters."
     )
 
-    # image_generation_task = Task(
-    #     description="Generate an AI-created image that visually represents the following tweet:\n{{writing_task.output}}\n"
-    #                 "Ensure the image aligns with the tweet content and is suitable for social media.",
-    #     agent=image_generation_agent,
-    #     expected_output="A visually relevant AI-generated image for the tweet."
-    # )
 
+   
     return [research_task ,trending_topics_task ,writing_task]
 
 # -------------- Function to Run CrewAI -----------------
@@ -309,12 +230,10 @@ def generate_tweet_and_image(selected_pillar):
     else:
         tweet_text = "⚠️ Error: Tweet could not be generated."
 
-    # image_path = "generated_image.jpg"
+    image_path = "generated_image.jpg"
    
     print("✅ Extracted Tweet:", tweet_text)
     print("✅ Extracted Image Path:", image_path)
 
     return tweet_text, image_path
 
-
-# print(generate_tweet_and_image("AI workflows"))

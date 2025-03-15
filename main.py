@@ -6,13 +6,13 @@ from fastapi.middleware.cors import CORSMiddleware
 app = FastAPI()
 
 # Allow frontend requests
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Change "*" to your frontend URL in production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=["*"],  # Change "*" to your frontend URL in production
+#     allow_credentials=True,
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
 # Define request model
 class TweetRequest(BaseModel):
     selected_pillar: str
@@ -20,12 +20,12 @@ class TweetRequest(BaseModel):
 # Define response model
 class TweetResponse(BaseModel):
     tweet_text: str
-    image_path: Optional[str] = None
+    # image_path: Optional[str] = None
 
 @app.post("/generate_tweet", response_model=TweetResponse)
 async def generate_tweet(request: TweetRequest):
-    tweet_text, image_path = generate_tweet_and_image(request.selected_pillar)
-    return {"tweet_text": tweet_text, "image_path": image_path}
+    tweet_text = generate_tweet_and_image(request.selected_pillar)
+    return {"tweet_text": tweet_text}
 
 # if __name__ == "__main__":
 #     import uvicorn
